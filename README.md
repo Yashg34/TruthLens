@@ -4,11 +4,6 @@
 
 Paste a headline, a forwarded message, or a social media post. TruthLens searches the web, reads the sources, and returns a verdict together with the exact passages behind it, so you can check the reasoning yourself instead of trusting a black box.
 
-<!--
-Add screenshots to docs/ and uncomment:
-![Landing page](docs/about.png)
-![Analysis results](docs/results.png)
--->
 
 > [!WARNING]
 > **TruthLens does not guarantee that a result is correct.** It is an aid for investigating claims, not a final judge. It uses an AI model and whatever sources it can find, and both can be wrong. See [Limitations](#limitations-and-disclaimer) before relying on any result.

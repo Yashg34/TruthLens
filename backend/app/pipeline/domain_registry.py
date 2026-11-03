@@ -1,8 +1,7 @@
-
 from urllib.parse import urlparse
 
 
-# Initial source-priority rules for TruthLens.
+# Source-priority rules for TruthLens.
 # Tier 1 = highest priority; Tier 4 = lowest priority.
 # These tiers are heuristics, not proof of accuracy.
 
@@ -13,35 +12,121 @@ TIER_WEIGHTS = {
     4: 0.2,
 }
 
-# Official Indian government domains.
-TIER_1_DOMAINS = {
-    "india.gov.in",
-    "pib.gov.in",
-    "pmindia.gov.in",
-    "mea.gov.in",
-    "mib.gov.in",
-    "mha.gov.in",
-    "education.gov.in",
-    "mospi.gov.in",
-    "eci.gov.in",
-    "supremecourtofindia.nic.in",
+# Tier 1: any Indian government / NIC site (central, state, district),
+# matched by suffix so new ministries and state portals are covered.
+TIER_1_SUFFIXES = {
+    "gov.in",
+    "nic.in",
 }
 
-# Established news organizations.
-# This list is a starting point, not an endorsement of every article.
-TIER_2_DOMAINS = {
+# Tier 1: official bodies that don't use gov.in / nic.in.
+TIER_1_DOMAINS = {
+    "rbi.org.in",
+    "sansad.in",
+    "who.int",
+    "un.org",
+}
+
+# Tier 2: established news organizations.
+# A starting point, not an endorsement of every article.
+TIER_2_NEWS_DOMAINS = {
+    # India
+    "thehindu.com",
+    "thehindubusinessline.com",
+    "indianexpress.com",
+    "newindianexpress.com",
+    "ndtv.com",
+    "hindustantimes.com",
+    "timesofindia.indiatimes.com",
+    "economictimes.indiatimes.com",
+    "livemint.com",
+    "business-standard.com",
+    "ptinews.com",
+    "deccanherald.com",
+    "telegraphindia.com",
+    "tribuneindia.com",
+    "indiatoday.in",
+    "theprint.in",
+    "scroll.in",
+    "thewire.in",
+    # International
     "bbc.com",
     "bbc.co.uk",
     "reuters.com",
     "apnews.com",
-    "thehindu.com",
-    "indianexpress.com",
-    "ndtv.com",
+    "afp.com",
+    "theguardian.com",
+    "nytimes.com",
+    "washingtonpost.com",
+    "aljazeera.com",
+    "dw.com",
 }
 
-# Domains that do not match a known rule default to Tier 3.
-# Tier 4 is reserved for explicitly configured low-priority sources.
-TIER_4_DOMAINS = set()
+# Tier 2: dedicated fact-checking organizations.
+TIER_2_FACTCHECK_DOMAINS = {
+    "boomlive.in",
+    "altnews.in",
+    "factly.in",
+    "vishvasnews.com",
+    "newschecker.in",
+    "factchecker.in",
+    "snopes.com",
+    "politifact.com",
+    "factcheck.org",
+}
+
+TIER_2_DOMAINS = TIER_2_NEWS_DOMAINS | TIER_2_FACTCHECK_DOMAINS
+
+# Tier 4: user-generated platforms (domain says nothing about the author)
+# and free hosting subdomains (anyone can publish a page in minutes).
+TIER_4_DOMAINS = {
+    # Social / messaging / UGC
+    "instagram.com",
+    "instagr.am",
+    "facebook.com",
+    "fb.com",
+    "fb.watch",
+    "threads.net",
+    "x.com",
+    "twitter.com",
+    "t.co",
+    "t.me",
+    "telegram.me",
+    "wa.me",
+    "whatsapp.com",
+    "reddit.com",
+    "quora.com",
+    "tiktok.com",
+    "sharechat.com",
+    "youtube.com",
+    "youtu.be",
+    "medium.com",
+    "substack.com",
+    # Free hosting / deployment platforms
+    "vercel.app",
+    "netlify.app",
+    "github.io",
+    "pages.dev",
+    "workers.dev",
+    "onrender.com",
+    "herokuapp.com",
+    "railway.app",
+    "fly.dev",
+    "web.app",
+    "firebaseapp.com",
+    "streamlit.app",
+    "hf.space",
+    "replit.app",
+    "repl.co",
+    "glitch.me",
+    "surge.sh",
+    "ngrok-free.app",
+    "blogspot.com",
+    "blogspot.in",
+    "wordpress.com",
+    "wixsite.com",
+    "weebly.com",
+}
 
 
 def normalize_domain(url: str) -> str:
@@ -77,6 +162,10 @@ def _matches_domain(host: str, domain: str) -> bool:
     return host == domain or host.endswith("." + domain)
 
 
+def _matches_any(host: str, domains) -> bool:
+    return any(_matches_domain(host, d) for d in domains)
+
+
 def normalize_organization(url: str) -> str:
     """Group related hostnames under a common source organization."""
 
@@ -93,7 +182,6 @@ def normalize_organization(url: str) -> str:
     return host
 
 
-
 def classify_source(url: str) -> dict:
     """Classify a source using the configured domain rules."""
 
@@ -108,17 +196,23 @@ def classify_source(url: str) -> dict:
             "reason": "Invalid or unsupported URL",
         }
 
-    if any(_matches_domain(host, d) for d in TIER_1_DOMAINS):
-        tier = 1
-        reason = "Recognized official government domain"
+    # Tier 4 is checked first so a low-priority rule can never be
+    # overridden by a broader higher-tier match.
+    if _matches_any(host, TIER_4_DOMAINS):
+        tier = 4
+        reason = "User-generated platform or free-hosting domain"
 
-    elif any(_matches_domain(host, d) for d in TIER_2_DOMAINS):
+    elif _matches_any(host, TIER_1_SUFFIXES) or _matches_any(host, TIER_1_DOMAINS):
+        tier = 1
+        reason = "Recognized official government / institutional domain"
+
+    elif _matches_any(host, TIER_2_FACTCHECK_DOMAINS):
+        tier = 2
+        reason = "Recognized fact-checking organization"
+
+    elif _matches_any(host, TIER_2_NEWS_DOMAINS):
         tier = 2
         reason = "Recognized news organization domain"
-
-    elif any(_matches_domain(host, d) for d in TIER_4_DOMAINS):
-        tier = 4
-        reason = "Explicitly configured low-priority domain"
 
     else:
         tier = 3
@@ -141,7 +235,29 @@ def rank_sources(urls: list[str]) -> list[dict]:
 
     results = [classify_source(url) for url in urls]
 
-    return sorted(
-        results,
-        key=lambda item: item["tier"],
-    )
+    return sorted(results, key=lambda item: item["tier"])
+
+
+if __name__ == "__main__":
+    cases = {
+        "https://pib.gov.in/PressReleasePage.aspx?PRID=1": 1,
+        "https://main.sci.gov.in/": 1,
+        "https://rbi.org.in/": 1,
+        "https://www.thehindu.com/news/": 2,
+        "https://www.boomlive.in/fact-check": 2,
+        "https://somerandomblog.com/post": 3,
+        "https://www.instagram.com/p/abc/": 4,
+        "https://m.facebook.com/story": 4,
+        "https://fake-news.vercel.app/": 4,
+        "https://my-site.netlify.app/": 4,
+        # Collision checks: must NOT match a higher tier.
+        "https://pib.gov.in.evil.com/": 3,
+        "https://notreuters.com/": 3,
+        "https://pib.gov.in.vercel.app/": 4,
+        "ftp://pib.gov.in/file": 4,
+        "": 4,
+    }
+    for url, expected in cases.items():
+        got = classify_source(url)["tier"]
+        assert got == expected, f"{url!r}: expected {expected}, got {got}"
+    print("All tier checks passed.")
